@@ -1,1 +1,5 @@
-console.log("Hello via Bun!");
+import { main } from "./shinbasen.js";
+
+(async () => {
+    await main();
+})();

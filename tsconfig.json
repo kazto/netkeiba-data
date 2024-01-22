@@ -1,10 +1,13 @@
 {
   "compilerOptions": {
     "lib": ["ESNext"],
-    "module": "esnext",
-    "target": "esnext",
-    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ESNext",
     "moduleDetection": "force",
+    "moduleResolution": "Bundler",
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
     "allowImportingTsExtensions": true,
     "strict": true,
     "downlevelIteration": true,
@@ -14,8 +17,28 @@
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
     "noEmit": true,
+    "alwaysStrict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "strictFunctionTypes": true,
+    "strictNullChecks": true,
     "types": [
       "bun-types" // add Bun global
+    ],
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "sourceMap": true
+  },
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"],
+  "ts-node": {
+    "transpileOnly": true,
+		"files": true,
+		"experimentalResolver": true,
+    "esm": true,
+    "require": [
+      "tsconfig-paths/register",
+      "ts-node/register"
     ]
   }
 }
