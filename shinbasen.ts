@@ -4,21 +4,21 @@ import { PrismaClient } from '@prisma/client';
 const { decode: iconv_decode } = iconv;
 
 type RaceHorseRecord = {
-    race_code: string,
-    result: number,
-    number: number,
-    horse_id: string,
-    horse_name: string,
-    sex_age: string,
-    carry_weight: string,
-    jockey_id: string,
-    time: string,
-    progress: string,
-    last_time: number,
-    win_odds: number,
-    favorite: number,
-    horse_weight: number,
-    horse_weight_diff: string,
+    race_code: string,		// レースID
+    result: number,		// 着順
+    number: number,		// 馬番
+    horse_id: string,		// 馬ID
+    horse_name: string,		// 馬名
+    sex_age: string,		// 性齢
+    carry_weight: string,	// 斤量
+    jockey_id: string,		// ジョッキーID
+    time: string,		// タイム
+    progress: string,		// 通過
+    last_time: number,		// 上がり
+    win_odds: number,		// 単勝オッズ
+    favorite: number,		// 人気
+    horse_weight: number,	// 馬体重
+    horse_weight_diff: string,	// 馬体重前走差
 }
 
 type RaceRecord = {
@@ -35,14 +35,14 @@ type RaceRecord = {
 }
 
 
-const convertToUTF8 = async (res: Response) => {
+async function convertToUTF8 (res: Response) {
     const ab = await res.arrayBuffer();
     const buf = Buffer.from(ab);
     const utf8 = iconv_decode(buf, 'euc-jp');
     return utf8;
 }
 
-const parseLinks = async (res: Response) => {
+async function parseLinks(res: Response) {
     const $ = load(await convertToUTF8(res));
 
     const allLinks = $('table > tbody > tr > td > a').map((i, a) => $(a).attr('href')).toArray();
@@ -50,13 +50,13 @@ const parseLinks = async (res: Response) => {
     return raceLinks;
 }
 
-const parseRaceRecord = async ($: CheerioAPI, link: string) => {
+async function parseRaceRecord($: CheerioAPI, link: string): RaceRecord {
     const race = $('.data_intro > dl > dd');
     const race_name = race.children('h1').text();
     const race_info = race.children('p').text().split('/').map((v: string) => v.trim());
     const race_date_place = $('.data_intro > p.smalltxt').text().split(' ');
 
-    return <RaceRecord>{
+    return {
         code: link.split('/')[2],
         name: race_name,
         date: race_date_place[0].replace('年', '/').replace('月', '/').replace('日', ''),
@@ -69,14 +69,14 @@ const parseRaceRecord = async ($: CheerioAPI, link: string) => {
     };
 }
 
-const parseRaceHorseRecord = async ($: CheerioAPI, race_id: string) => {
+async function parseRaceHorseRecord($: CheerioAPI, race_id: string) : RaceHorseRecord {
     const race_result_table = $('#contents_liquid > table > tbody');
     const trs = race_result_table.children('tr').toArray().slice(1);
 
     return trs.map((tr, i) => {
         const tds = $(tr).children('td').toArray();
 
-        return <RaceHorseRecord> {
+        return {
             race_code: race_id,
             result: Number($(tds[0]).text()),
             number: Number($(tds[2]).text()),
@@ -94,10 +94,9 @@ const parseRaceHorseRecord = async ($: CheerioAPI, race_id: string) => {
             horse_weight_diff: $(tds[14]).text().match(/^\d+\(([+-]*\d+)\)/)?.[1],
         }
     })
-
 }
 
-const parseRace = async (res: Response, link: string) => {
+async function parseRace (res: Response, link: string) {
     const $ = load(await convertToUTF8(res));
     const raceRecord = await parseRaceRecord($, link);
     const raceHorseRecords = await parseRaceHorseRecord($, raceRecord.code);
@@ -107,13 +106,13 @@ const parseRace = async (res: Response, link: string) => {
     }
 }
 
-const fetchRaceLinks = async (url: string) => {
+async function fetchRaceLinks (url: string) {
     const res = await fetch(url);
     const raceLinks = await parseLinks(res);
     return raceLinks;
 }
 
-const initPrisma = async () => {
+async function initPrisma () {
     const prisma = new PrismaClient({log: [
         {
           emit: 'stdout',
@@ -135,15 +134,15 @@ const initPrisma = async () => {
     return prisma;
 }
 
-const fetchRace = async (base: string, link: string) => {
+async function fetchRace (base: string, link: string) {
     const resRace = await fetch(base + link);
     const raceData = await parseRace(resRace, link);
     return raceData;
 }
 
-export const main = async () => {
-    const base = 'https://db.netkeiba.com';
-    const url = base + '/?pid=race_list&word=&start_year=none&start_mon=none&end_year=none&end_mon=none&jyo%5B%5D=01&jyo%5B%5D=02&jyo%5B%5D=03&jyo%5B%5D=04&jyo%5B%5D=05&jyo%5B%5D=06&jyo%5B%5D=07&jyo%5B%5D=08&jyo%5B%5D=09&jyo%5B%5D=10&grade%5B%5D=8&kyori_min=&kyori_max=&sort=date&list=100';
+export async function main() {
+    const base = 'https://db.netkeiba.com/';
+    const url = base + '?pid=race_list&word=&start_year=none&start_mon=none&end_year=none&end_mon=none&jyo%5B%5D=01&jyo%5B%5D=02&jyo%5B%5D=03&jyo%5B%5D=04&jyo%5B%5D=05&jyo%5B%5D=06&jyo%5B%5D=07&jyo%5B%5D=08&jyo%5B%5D=09&jyo%5B%5D=10&grade%5B%5D=8&kyori_min=&kyori_max=&sort=date&list=100';
 
     const raceLinks = await fetchRaceLinks(url);
     const prisma = await initPrisma();
@@ -192,4 +191,3 @@ export const main = async () => {
         })
     }
 }
-
