@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "jest",
-    "ts-node": "ts-node"
+    "ts-node": "ts-node",
+    "prisma:generate": "prisma generate"
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.31",
