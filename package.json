@@ -1,27 +1,46 @@
 {
-  "name": "netkeiba-data",
-  "module": "index.ts",
-  "type": "module",
-  "scripts": {
-    "test": "jest",
-    "ts-node": "ts-node",
-    "prisma:generate": "prisma generate"
-  },
-  "devDependencies": {
-    "@types/cheerio": "^0.22.31",
-    "@types/iconv": "^3.0.1",
-    "bun-types": "latest",
-    "prisma": "^5.2.0",
-    "tsconfig-paths": "^4.2.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "@prisma/client": "^5.2.0",
-    "cheerio": "^1.0.0-rc.12",
-    "iconv-lite": "^0.6.3",
-    "puppeteer": "^21.1.0",
-    "ts-node": "^10.9.1"
-  }
+    "name": "netkeiba-data",
+    "author": "",
+    "description": "Stricli command line application",
+    "license": "MIT",
+    "type": "module",
+    "version": "0.0.0",
+    "files": [
+        "dist"
+    ],
+    "bin": {
+        "netkeiba-data": "dist/cli.js",
+        "__netkeiba-data_bash_complete": "dist/bash-complete.js"
+    },
+    "engines": {
+        "node": ">=23"
+    },
+    "scripts": {
+        "prebuild": "tsc -p src/tsconfig.json",
+        "build": "tsup",
+        "prepublishOnly": "npm run build",
+        "postinstall": "netkeiba-data install"
+    },
+    "tsup": {
+        "entry": [
+            "src/bin/cli.ts",
+            "src/bin/bash-complete.ts"
+        ],
+        "format": [
+            "esm"
+        ],
+        "tsconfig": "src/tsconfig.json",
+        "clean": true,
+        "splitting": true,
+        "minify": true
+    },
+    "dependencies": {
+        "@stricli/core": "^1.1.2",
+        "@stricli/auto-complete": "^1.1.2"
+    },
+    "devDependencies": {
+        "@types/node": "23.x",
+        "tsup": "^6.7.0",
+        "typescript": "5.6.x"
+    }
 }

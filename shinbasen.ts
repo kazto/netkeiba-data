@@ -1,72 +1,52 @@
 import { load, CheerioAPI } from 'cheerio';
-import iconv from 'iconv-lite';
+// import { html } from 'cheerio/static';
 import { PrismaClient } from '@prisma/client';
-const { decode: iconv_decode } = iconv;
-
-type RaceHorseRecord = {
-    raceCode: string,		// レースID
-    result: number,		// 着順
-    horseNum: number,		// 馬番
-    horseId: string,		// 馬ID
-    horseName: string,		// 馬名
-    sexAge: string,		// 性齢
-    carryWeight: string,	// 斤量
-    jockeyId: string,		// ジョッキーID
-    time: string,		// タイム
-    progress: string,		// 通過
-    lastTime: number,		// 上がり
-    winOdds: number,		// 単勝オッズ
-    favorite: number,		// 人気
-    horseWeight: number,	// 馬体重
-    horseWeightDiff: string,	// 馬体重前走差
-}
-
-type RaceRecord = {
-    code: string,
-    name: string,
-    date: string,
-    place: string,
-    distance: string,
-    course: string,
-    weather: string,
-    condition: string,
-    time: string,
-    // race_horse_records: RaceHorseRecord[],
-}
-
-async function convertToUTF8(ab: ArrayBuffer) {
-    const buf = Buffer.from(ab);
-    const utf8 = iconv_decode(buf, 'euc-jp');
-    return utf8;
-}
+import { convertToUTF8 } from 'convertToUTF8';
+import type { RaceHorseRecord, RaceRecord } from './index.d';
 
 async function parseLinks(ab: ArrayBuffer) {
     const $ = load(await convertToUTF8(ab));
 
     const allLinks = $('table > tbody > tr > td > a').map((i, a) => $(a).attr('href')).toArray();
     const raceLinks = allLinks.filter(link => /\/race\/\d+/.exec(link));
-    const nextPages = $('div.common_pager > ul > li > a').map((a) => $(a).attr('href')).toArray();
+    const nextPages = $('div.common_pager > ul > li > a').map((i, a) => $(a).attr('href')).toArray();
 
-    console.log(nextPages);
-    return raceLinks;
+    return { raceLinks, nextPages };
 }
 
 async function parseRaceRecord($: CheerioAPI, link: string): Promise<RaceRecord> {
     const race = $('.data_intro > dl > dd');
-    const race_name = race.children('h1').text();
     const race_info = race.children('p').text().split('/').map((v: string) => v.trim());
-    const race_date_place = $('.data_intro > p.smalltxt').text().split(' ');
-    
+    // const race_date_place = $('.data_intro > p.smalltxt').text().split(' ');
+    // const tmp = $('div.data_intro > p.smalltxt').text();
+    const tmp = $('.data_intro > p.smalltxt').text();
+    const race_date_place = tmp.split(' ')
+    if(race_date_place.length < 2) {
+	Bun.write('error.html', $.html());
+	throw new Error(`link: https://db.netkeiba.com${link} , tmp: "${tmp}"`);
+    }
+
+    const code = link.split('/')[2];
+    const name = race.children('h1').text();
+    const date = race_date_place[0].replace('年', '/').replace('月', '/').replace('日', '');
+    const distance_s = race_info[0].match(/(\d+)m/)?.[1];
+    const distance = distance_s ? Number(distance_s) : undefined;
+    const place = race_date_place[1].match(/\d+回(.+)\d+日目/)?.[1] || '';
+    const course = race_info[0].match(/([^\d]+)\d+m/)?.[1] || '';
+    const weather = race_info[1].split(':')[1].trim() || '';
+    const condition = race_info[2].split(':')[1].trim() || '';
+    const time = race_info[3].split(':').slice(1).join(':').trim() || '';
+
     return {
-        code: link.split('/')[2],
-        name: race_name,
-        date: race_date_place[0].replace('年', '/').replace('月', '/').replace('日', ''),
-        place: race_date_place[1].match(/\d回(.+)\d日目/)?.[1] || '',
-        distance: race_info[0].match(/(\d+m)/)?.[1] || '',
-        course: race_info[0].match(/([^\d]+)\d+m/)?.[1] || '',
-        weather: race_info[1].split(':')[1].trim() || '',
-        condition: race_info[2].split(':')[1].trim() || '',
-        time: race_info[3].split(':').slice(1).join(':').trim() || '',
+        code,
+        name,
+        date,
+        place,
+        distance,
+        course,
+        weather,
+        condition,
+        time
     };
 }
 
@@ -91,8 +71,8 @@ async function parseRaceHorseRecord($: CheerioAPI, race_id: string): Promise<Rac
             lastTime: Number($(tds[11]).text()),
             winOdds: Number($(tds[12]).text()),
             favorite: Number($(tds[13]).text()),
-            horseWeight: Number($(tds[14]).text().match(/^(\d+)\(/)?.[1]) || 0,
-            horseWeightDiff: $(tds[14]).text().match(/^\d+\(([+-]*\d+)\)/)?.[1] || '',
+            horseWeight: Number($(tds[14]).text().match(/^(\d+)\(/)?.[1]),
+            horseWeightDiff: $(tds[14]).text().match(/^\d+\(([+-]*\d+)\)/)?.[1] || "",
         }
     })
 }
@@ -109,8 +89,7 @@ async function parseRace(ab: ArrayBuffer, link: string) {
 
 async function fetchRaceLinks(url: string) {
     const res = await fetch(url);
-    const raceLinks = await parseLinks(await res.arrayBuffer());
-    return raceLinks;
+    return await parseLinks(await res.arrayBuffer());
 }
 
 export async function initPrisma() {
@@ -143,16 +122,48 @@ async function fetchRace(base: string, link: string) {
     return raceData;
 }
 
-export async function main() {
+export async function main(year: number) {
     const base = 'https://db.netkeiba.com/';
-    const url = base + '?pid=race_list&word=&start_year=none&start_mon=none&end_year=none&end_mon=none&jyo%5B%5D=01&jyo%5B%5D=02&jyo%5B%5D=03&jyo%5B%5D=04&jyo%5B%5D=05&jyo%5B%5D=06&jyo%5B%5D=07&jyo%5B%5D=08&jyo%5B%5D=09&jyo%5B%5D=10&grade%5B%5D=8&kyori_min=&kyori_max=&sort=date&list=100';
+    const params = {
+        pid: 'race_list',
+        word: '',
+        start_year: year.toString(),
+        start_mon: '1',
+        end_year: year.toString(),
+        end_mon: '12',
+        kyori_min: '',
+        kyori_max: '',
+        sort: 'date',
+        list: '100'
+    }
+    const params_jyo = ['01','02','03','04','05','06','07','08','09','10'];
+    const params_grade = ['8'];
+    const searchParams = new URLSearchParams(params);
+    for (const v of params_jyo) {
+    	searchParams.append(`jyo[]`, v)
+    }
+    for (const v of params_grade) {
+	    searchParams.append(`grade[]`, v)
+    }
+    const url = `${base}?${searchParams.toString()}`;
+    console.log(url);
 
-    const raceLinks = await fetchRaceLinks(url);
+    const { raceLinks, nextPages } = await fetchRaceLinks(url);
+    const urls = [...new Set(nextPages)];
+    const links = [raceLinks];
+    for(const u of urls) {
+        const ls = await fetchRaceLinks(u);
+        links.push(ls.raceLinks);
+    }
+    const flatLinks = links.flatMap(n => n);
+    
     const prisma = await initPrisma();
 
     console.log(raceLinks.length);
 
-    for (const link of raceLinks) {
+    for (const link of flatLinks) {
+	    await Bun.sleep(500);
+	
         const raceData = await fetchRace(base, link);
 
         // console.log(raceData);
@@ -180,24 +191,39 @@ export async function main() {
         };
 
         const race_json = `data/${data.code}_race.json`;
-        await Bun.write(race_json, JSON.stringify(data));
-        const racehorse_json = `data/${data.code}_racehorse.json`;
-        await Bun.write(racehorse_json, JSON.stringify(raceData.raceHorseRecords))
-
-        if (false) {
-            const race = await prisma.race.create({
-                data
-            }).then((v) => {
-                console.log(`race ${v.code} created`);
-                return v;
-            }).catch(e => {
-                console.log(e);
-                return null;
-            });
-
-            const raceHorse = await prisma.raceHorse.createMany({
-                data: raceData.raceHorseRecords
-            });
+        const race_fh = Bun.file(race_json);
+        if (await race_fh.exists()) {
+            console.log(`exists: ${race_json}`);
         }
+        else {
+            await Bun.write(race_fh, JSON.stringify(data));
+            console.log(`write: ${race_json}`);
+        }
+
+        const racehorse_json = `data/${data.code}_racehorse.json`;
+        const racehorse_fh = Bun.file(racehorse_json);
+        if (await racehorse_fh.exists()) {
+            console.log(`exists: ${racehorse_json}`);
+        }
+        else {
+            await Bun.write(racehorse_fh, JSON.stringify(raceData.raceHorseRecords))
+            console.log(`write: ${racehorse_json}`);
+        }
+
+        // if (false) {
+        //     const race = await prisma.race.create({
+        //         data
+        //     }).then((v) => {
+        //         console.log(`race ${v.code} created`);
+        //         return v;
+        //     }).catch(e => {
+        //         console.log(e);
+        //         return null;
+        //     });
+
+        //     const raceHorse = await prisma.raceHorse.createMany({
+        //         data: raceData.raceHorseRecords
+        //     });
+        // }
     }
 }
